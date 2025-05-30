@@ -11,75 +11,35 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { TextUpdaterNode } from './TextUpdaterNode'; // Убедитесь, что путь правильный
-import { v7 as uuidv7 } from 'uuid';
 
 const nodeTypes = { textUpdater: TextUpdaterNode };
 const nodeOrigin = [0.5, 0.5]; // Точка привязки узла (центр)
 
-// Счетчик для кнопки "Добавить узел (общий)"
-let generalNodeIdCounter = 1;
-const getGeneralNodeId = () => `general-${generalNodeIdCounter++}`;
+// Счетчик для ID новых узлов
+let nodeIdCounter = 1;
+const getNewNodeId = () => `node-${nodeIdCounter++}`;
+
+// Начальные узлы
+const initialNodes = [
+  {
+    id: '0',
+    type: 'textUpdater', // Начальный узел также textUpdater
+    data: { label: 'Начальный узел (ID: 0)' },
+    position: { x: 250, y: 50 },
+    // 'origin' будет использован из ReactFlow-пропа nodeOrigin
+  },
+];
 
 const FlowWithAddButton = () => {
   const reactFlowWrapper = useRef(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { screenToFlowPosition } = useReactFlow();
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
 
-  // Функция для добавления узла, вызываемая из кастомного узла
-  const addNodeFromCustom = useCallback((parentNodeProps) => {
-    const {
-      id: parentId,
-      type: parentNodeSpecificType, // Тип родительского узла
-      xPos: parentX,
-      yPos: parentY,
-      width: parentWidth, // Может быть null, если узел еще не отрендерен
-      height: parentHeight, // Может быть null
-    } = parentNodeProps;
-
-    const newNodeId = uuidv7();
-    // Позиционируем новый узел ниже родительского
-    const newYPosition = parentY + (parentHeight || 60) + 100; // Используем высоту родителя или значение по умолчанию + отступ
-    const newXPosition = parentX; // По той же X координате или со смещением, например parentX + (parentWidth || 150) / 2 - 75 (для центрирования)
-
-    const newNode = {
-      id: newNodeId,
-      type: parentNodeSpecificType, // Новый узел будет того же типа, что и родительский
-      position: { x: newXPosition, y: newYPosition },
-      origin: nodeOrigin,
-      draggable: true,
-      data: {
-        label: `Узел ${newNodeId} (от ${parentId})`,
-        // Каждый новый узел также получает способность добавлять другие узлы
-        actionCallback: (propsFromThisNewNode) => addNodeFromCustom(propsFromThisNewNode),
-      },
-    };
-
-    setNodes((nds) => nds.concat(newNode));
-    console.log(`Добавлен новый узел ${newNodeId} от родителя ${parentId}`);
-  }, [setNodes, nodeOrigin]); // Зависимости для useCallback
-
-  // Эффект для обновления узлов, если getInitialNodes меняется (например, если addNodeFromCustom пересоздается)
-  // Это может быть излишним, если addNodeFromCustom стабилен, но для безопасности:
-  useEffect(() => {
-    setNodes(getInitialNodes());
-  }, [addNodeFromCustom, setNodes]);
-  
-  // Функция для инициализации начальных узлов
-  // Мы используем функцию, чтобы callback `addNodeFromCustom` был правильно замкнут
-  const getInitialNodes = useCallback(() => [
-    {
-      id: '0',
-      type: 'textUpdater',
-      data: {
-        label: 'Начальный узел (ID: 0)',
-        // Эта actionCallback будет вызвана из TextUpdaterNode
-        // Она ожидает, что TextUpdaterNode передаст ей свои пропсы
-        actionCallback: (propsOfNode0) => addNodeFromCustom(propsOfNode0),
-      },
-      position: { x: 250, y: 50 }, // Начальная позиция
-    },
-  ], [addNodeFromCustom]); // Зависит от addNodeFromCustom
+  // useEffect для отслеживания изменений в узлах
+  // useEffect(() => {
+  //   console.log('Узлы изменились:', nodes);
+  // }, [nodes]);
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge(params, eds)),
@@ -87,13 +47,12 @@ const FlowWithAddButton = () => {
   );
 
   const onConnectEnd = useCallback((event) => {
-    // Логика при завершении соединения на пустом поле (если нужна)
     console.log('Попытка соединения завершена:', event);
   }, []);
 
   // Функция для кнопки "Добавить узел (общий)"
-  const addGenericNode = useCallback(() => {
-    const newNodeId = getGeneralNodeId();
+  const addNode = useCallback(() => {
+    const newNodeId = getNewNodeId();
     let position = { x: 100, y: 100 }; // Позиция по умолчанию
 
     if (reactFlowWrapper.current) {
@@ -111,20 +70,14 @@ const FlowWithAddButton = () => {
 
     const newNode = {
       id: newNodeId,
+      type: 'textUpdater', // Всегда тип 'textUpdater'
       position,
-      data: { label: `Общий узел ${newNodeId}` }, // У этих узлов нет actionCallback по умолчанию
-      origin: nodeOrigin,
-      type: 'default', // или 'textUpdater', если хотите такой же тип
-      // Если хотите, чтобы и эти узлы могли добавлять дочерние:
-      // type: 'textUpdater',
-      // data: {
-      //   label: `Общий узел ${newNodeId}`,
-      //   actionCallback: (props) => addNodeFromCustom(props),
-      // },
+      // 'origin' будет использован из ReactFlow-пропа nodeOrigin
+      data: { label: `TextUpdater Узел ${newNodeId}` }, // Данные для нового узла
     };
     setNodes((nds) => nds.concat(newNode));
-  }, [screenToFlowPosition, setNodes, nodes, nodeOrigin, addNodeFromCustom]); // Добавили addNodeFromCustom, если используем его для общих узлов
-
+    console.log(`Добавлен новый узел ${newNodeId} типа textUpdater`);
+  }, [screenToFlowPosition, setNodes, nodes]); // Зависимости
 
   return (
     <div
@@ -141,7 +94,7 @@ const FlowWithAddButton = () => {
         onConnectEnd={onConnectEnd}
         fitView
         fitViewOptions={{ padding: 0.2 }}
-        nodeOrigin={nodeOrigin}
+        nodeOrigin={nodeOrigin} // Глобальная точка привязки для узлов
         style={{ backgroundColor: '#F7F9FB' }}
         nodeTypes={nodeTypes}
       >
@@ -150,7 +103,7 @@ const FlowWithAddButton = () => {
       </ReactFlow>
 
       <button
-        onClick={addGenericNode}
+        onClick={addNode}
         style={{
           position: 'absolute',
           bottom: '20px',
@@ -164,9 +117,9 @@ const FlowWithAddButton = () => {
           zIndex: 10,
           boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
         }}
-        title="Добавить новый общий узел"
+        title="Добавить новый TextUpdater узел" // Обновленный title
       >
-        Добавить узел (общий)
+        Добавить узел (общий) {/* Текст кнопки сохранен */}
       </button>
     </div>
   );
